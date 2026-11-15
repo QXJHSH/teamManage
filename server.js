@@ -65,7 +65,7 @@ const server = http.createServer((req, res) => {
         }
         const rawPayload = parsedBody.payload || parsedBody;
         const forwardPayload = {
-          spreadsheetId: envSpreadsheetId || rawPayload.spreadsheetId || '',
+          spreadsheetId: envSpreadsheetId || rawPayload.spreadsheetId || '15zw5HdajgYVGS4odRv8qQeoPPtItgM04bTMOQACsqGg',
           date: rawPayload.date || '',
           morning: rawPayload.morning || '',
           afternoon: rawPayload.afternoon || '',

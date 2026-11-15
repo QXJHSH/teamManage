@@ -590,11 +590,9 @@
             sessionStorage.removeItem('frc10114_verified_auth_id');
             sessionStorage.removeItem('frc10114_login_ts');
             sessionStorage.removeItem('frc10114_last_active_ts');
-            sessionStorage.removeItem('frc10114_sheets_webhook_url');
           }
           if (typeof localStorage !== 'undefined') {
             localStorage.removeItem('frc10114_local_auth_v3');
-            localStorage.removeItem('frc10114_sheets_webhook_url');
           }
         } catch (e) {}
       }
@@ -711,7 +709,7 @@
         } catch (e) {}
       }
 
-      // Session-scoped & obfuscated Google Apps Script Webhook URL storage (prevents exposure on shared PCs)
+      // Persistent & obfuscated Google Apps Script Webhook URL storage
       function getSessionWebhookUrl() {
         try {
           let raw = '';
@@ -719,14 +717,14 @@
             raw = sessionStorage.getItem('frc10114_sheets_webhook_url') || '';
           }
           if (!raw && typeof localStorage !== 'undefined') {
-            const legacyUrl = localStorage.getItem('frc10114_sheets_webhook_url') || '';
-            if (legacyUrl) {
-              localStorage.removeItem('frc10114_sheets_webhook_url');
-              if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('frc10114_role') === 'admin') {
-                const enc = encodeSecret(legacyUrl);
-                sessionStorage.setItem('frc10114_sheets_webhook_url', enc);
-                raw = enc;
-              }
+            raw = localStorage.getItem('frc10114_sheets_webhook_url') || '';
+            if (raw && !raw.startsWith('enc$')) {
+              const enc = encodeSecret(raw);
+              localStorage.setItem('frc10114_sheets_webhook_url', enc);
+              raw = enc;
+            }
+            if (raw && typeof sessionStorage !== 'undefined') {
+              sessionStorage.setItem('frc10114_sheets_webhook_url', raw);
             }
           }
           if (!raw) return '';
@@ -738,15 +736,20 @@
 
       function setSessionWebhookUrl(url) {
         try {
+          const clean = (url || '').trim();
+          const enc = clean ? encodeSecret(clean) : '';
           if (typeof localStorage !== 'undefined') {
-            localStorage.removeItem('frc10114_sheets_webhook_url');
+            if (!enc) {
+              localStorage.removeItem('frc10114_sheets_webhook_url');
+            } else {
+              localStorage.setItem('frc10114_sheets_webhook_url', enc);
+            }
           }
           if (typeof sessionStorage !== 'undefined') {
-            const clean = (url || '').trim();
-            if (!clean) {
+            if (!enc) {
               sessionStorage.removeItem('frc10114_sheets_webhook_url');
             } else {
-              sessionStorage.setItem('frc10114_sheets_webhook_url', encodeSecret(clean));
+              sessionStorage.setItem('frc10114_sheets_webhook_url', enc);
             }
           }
         } catch (e) {}
@@ -3468,6 +3471,8 @@
                   if (data.attendance && Array.isArray(data.attendance)) {
                     setAttendance(data.attendance);
                     try { localStorage.setItem('frc10114_attendance', JSON.stringify(data.attendance)); } catch (e) {}
+                    const latestMembers = (data.members && Array.isArray(data.members)) ? data.members : members;
+                    autoSyncTomorrowAttendanceToSheet(data.attendance, latestMembers, false);
                   }
                   if (data.reservations && Array.isArray(data.reservations)) {
                     setMachineReservations(data.reservations);
@@ -4024,12 +4029,6 @@
           try {
             sessionStorage.setItem('frc10114_logged_in', 'true');
             sessionStorage.setItem('frc10114_role', role);
-            if (role !== 'admin') {
-              sessionStorage.removeItem('frc10114_sheets_webhook_url');
-            }
-            if (typeof localStorage !== 'undefined') {
-              localStorage.removeItem('frc10114_sheets_webhook_url');
-            }
           } catch (e) {}
 
           if (role === 'admin') {
@@ -6088,6 +6087,7 @@
                     setAttendance(next);
                     try { localStorage.setItem('frc10114_attendance', JSON.stringify(next)); } catch (e) {}
                     syncToCloud({ attendance: next });
+                    autoSyncTomorrowAttendanceToSheet(next, sortedMembers, true);
                     const typeText = rec.type === 'attendance' ? '留校出席' : rec.type === 'leave' ? '請假' : '未請假';
                     showToast('考勤登記完成', `已新增「${rec.studentName}」的${typeText}紀錄`, 'success');
                   }}
@@ -6097,6 +6097,7 @@
                       setAttendance(next);
                       try { localStorage.setItem('frc10114_attendance', JSON.stringify(next)); } catch (e) {}
                       syncToCloud({ attendance: next });
+                      autoSyncTomorrowAttendanceToSheet(next, sortedMembers, true);
                       showToast('紀錄已刪除', `已自考勤名單移除「${studentName}」(${dateStr})`, 'info');
                     }
                   }}
@@ -6207,6 +6208,7 @@
                     setAttendance(next);
                     try { localStorage.setItem('frc10114_attendance', JSON.stringify(next)); } catch (e) {}
                     syncToCloud({ attendance: next });
+                    autoSyncTomorrowAttendanceToSheet(next, sortedMembers, true);
                     showToast('申請送出成功！', `已登記 ${safeRec.date} 之時段，即刻同步至管理員與家長週表。`, 'success');
                   }}
                   onCancelRecord={(recId, dateStr, typeText) => {
@@ -6220,6 +6222,7 @@
                     setAttendance(next);
                     try { localStorage.setItem('frc10114_attendance', JSON.stringify(next)); } catch (e) {}
                     syncToCloud({ attendance: next });
+                    autoSyncTomorrowAttendanceToSheet(next, sortedMembers, true);
                     showToast('已取消申請', `已成功取消「${dateStr}」之${typeText}登記。`, 'info');
                   }}
                 />
@@ -12874,10 +12877,8 @@
       }
 
       // --- GOOGLE SPREADSHEET & ATTENDANCE ROSTER EXPORT HELPERS ---
-      // 試算表 ID 與 Webhook URL 已移轉至 Vercel 後端環境變數 (process.env.GOOGLE_SPREADSHEET_ID / process.env.GAS_WEBHOOK_URL)
-      // 前端統一透過 /api/submit-sheet 安全轉發，不在前端原始碼暴露試算表 ID 或金鑰
-      const GOOGLE_SPREADSHEET_ID = '';
-      const GOOGLE_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/';
+      const GOOGLE_SPREADSHEET_ID = '15zw5HdajgYVGS4odRv8qQeoPPtItgM04bTMOQACsqGg';
+      const GOOGLE_SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_SPREADSHEET_ID}/edit`;
 
       function extractClassCode(className) {
         if (!className) return '';
@@ -12998,6 +12999,73 @@
         const mm = String(deadline.getMonth() + 1).padStart(2, '0');
         const dd = String(deadline.getDate()).padStart(2, '0');
         return `${yyyy}-${mm}-${dd} 21:00`;
+      }
+
+      function buildAttendanceSheetPayload(recordsList, membersList, targetDateStr) {
+        const dateStr = targetDateStr || getTomorrowDateStr();
+        const target = (recordsList || []).filter(r => r && r.date === dateStr && r.type === 'attendance');
+        const morning = sortStudentsByClassOrder(target.filter(r => (r.slots || []).includes('morning')), membersList);
+        const afternoon = sortStudentsByClassOrder(target.filter(r => (r.slots || []).includes('afternoon')), membersList);
+        const evening = sortStudentsByClassOrder(target.filter(r => (r.slots || []).includes('evening')), membersList);
+
+        const morningNames = morning.map(r => formatStudentWithClass(r.studentName, r.studentId, membersList));
+        const afternoonNames = afternoon.map(r => formatStudentWithClass(r.studentName, r.studentId, membersList));
+        const eveningNames = evening.map(r => formatStudentWithClass(r.studentName, r.studentId, membersList));
+
+        const periodSections = [];
+        if (morningNames.length > 0) periodSections.push(`⛅ 上午 (09-12點)：\n${morningNames.join('\n')}`);
+        if (afternoonNames.length > 0) periodSections.push(`☀️ 下午 (13-17點)：\n${afternoonNames.join('\n')}`);
+        if (eveningNames.length > 0) periodSections.push(`🌙 晚上 (18-21點)：\n${eveningNames.join('\n')}`);
+
+        let fullText = `📢 【明日申請在校學習名單】\n📅 日期：${dateStr}\n\n明日申請在校人員如下：\n`;
+        if (periodSections.length > 0) {
+          fullText += periodSections.join('\n\n');
+        } else {
+          fullText += '無人申請留校';
+        }
+
+        const savedUrl = (getSessionWebhookUrl() || '').trim();
+        return {
+          spreadsheetId: GOOGLE_SPREADSHEET_ID,
+          date: dateStr,
+          morning: morningNames.length > 0 ? morningNames.join('、') : '無人申請',
+          afternoon: afternoonNames.length > 0 ? afternoonNames.join('、') : '無人申請',
+          evening: eveningNames.length > 0 ? eveningNames.join('、') : '',
+          fullText,
+          submittedAt: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
+          ...(savedUrl ? { webhookUrl: savedUrl } : {}),
+        };
+      }
+
+      let _autoSheetSyncInFlight = false;
+      async function autoSyncTomorrowAttendanceToSheet(recordsList, membersList, forceSync = false) {
+        if (typeof fetch === 'undefined' || _autoSheetSyncInFlight) return false;
+        try {
+          const payload = buildAttendanceSheetPayload(recordsList, membersList, getTomorrowDateStr());
+          if (!forceSync && typeof localStorage !== 'undefined') {
+            const lastText = localStorage.getItem('frc10114_last_auto_sheet_text') || '';
+            if (lastText === payload.fullText) return true;
+          }
+          _autoSheetSyncInFlight = true;
+          const res = await fetch('/api/submit-sheet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (res && res.ok) {
+            try {
+              if (typeof localStorage !== 'undefined') {
+                localStorage.setItem('frc10114_last_auto_sheet_text', payload.fullText);
+              }
+            } catch (e) {}
+            return true;
+          }
+        } catch (err) {
+          // Silent background catch: never block or interrupt user UI
+        } finally {
+          _autoSheetSyncInFlight = false;
+        }
+        return false;
       }
 
       function AdminAttendanceTab({ records, members, onAddRecord, onDeleteRecord }) {
@@ -13140,6 +13208,7 @@
           setIsSendingWebhook(true);
           setWebhookNotice('');
           const webhookPayload = {
+            spreadsheetId: GOOGLE_SPREADSHEET_ID,
             date: exportRecords.targetDate,
             morning: exportRecords.morningStr,
             afternoon: exportRecords.afternoonStr,
@@ -13164,6 +13233,11 @@
                 if (!proxyRes.ok || (proxyData && proxyData.status === 'error')) {
                   throw new Error((proxyData && proxyData.message) || `後端轉發回應異常 (HTTP ${proxyRes.status})`);
                 }
+                try {
+                  if (typeof localStorage !== 'undefined' && exportRecords.targetDate === getTomorrowDateStr()) {
+                    localStorage.setItem('frc10114_last_auto_sheet_text', exportRecords.fullText);
+                  }
+                } catch (e) {}
                 setWebhookNotice('✅ 已透過 Vercel 後端代理 (/api/submit-sheet) 確認寫入 Google 試算表！');
                 setTimeout(() => setWebhookNotice(''), 5000);
                 return;
@@ -13909,7 +13983,7 @@
                             <li>點選上方選單的 <strong>「擴充功能」 &gt; 「Apps Script」</strong>。</li>
                             <li>清空原有內容，貼上下方已整合的完整程式碼並點選「儲存」。</li>
                             <li>
-                              <strong>設定每日定時自動更新（無人化全自動）</strong>：在上方函式下拉選單選擇 <code>createDailyTrigger</code> 並點選「執行」，即可一鍵啟動每日 21:00 自動抓取並覆蓋 A1！
+                              <strong>設定定時自動更新（無人化全自動）</strong>：在上方函式下拉選單選擇 <code>setupAllTriggers</code>（或 <code>createDailyTrigger</code>）並點選「執行」，即可一鍵啟動每 30 分鐘自動抓取覆蓋 A1 及每日 21:00 自動推播！
                             </li>
                             <li>
                               <strong>設定網頁按鈕即時發送（選填）</strong>：點選右上角「部署」&gt;「新增部署作業」&gt; 選擇「網路應用程式」&gt; 存取權限設為「任何人 (Anyone)」，複製生成的網址貼到上方輸入框即可。
@@ -13920,15 +13994,24 @@
                               type="button"
                               onClick={() => {
                                 const scriptCode = [
-                                  '// FRC 10114 隊務管理系統 - 自動更新明日留校名單至 Google 試算表 (安全強化版)',
-                                  '// 請於 Apps Script「專案設定」>「指令碼屬性」設定 SPREADSHEET_ID、FIREBASE_API_KEY 與 WEBHOOK_SECRET',
+                                  '// FRC 10114 隊務管理系統 - 自動更新明日留校名單至 Google 試算表 (安全強化相容版)',
+                                  '// 預設已綁定試算表 ID，亦可於 Apps Script「專案設定」>「指令碼屬性」自訂 SPREADSHEET_ID、FIREBASE_API_KEY、LINE_CHANNEL_ACCESS_TOKEN',
                                   'var SCRIPT_PROPS = PropertiesService.getScriptProperties();',
-                                  'var SPREADSHEET_ID = SCRIPT_PROPS.getProperty("SPREADSHEET_ID") || "";',
-                                  'var FIREBASE_API_KEY = SCRIPT_PROPS.getProperty("FIREBASE_API_KEY") || "";',
-                                  'var WEBHOOK_SECRET = SCRIPT_PROPS.getProperty("WEBHOOK_SECRET") || "";',
+                                  'var SPREADSHEET_ID = (SCRIPT_PROPS.getProperty("SPREADSHEET_ID") || "' + GOOGLE_SPREADSHEET_ID + '").trim();',
+                                  'var FIREBASE_API_KEY = (SCRIPT_PROPS.getProperty("FIREBASE_API_KEY") || "").trim();',
+                                  'var WEBHOOK_SECRET = (SCRIPT_PROPS.getProperty("WEBHOOK_SECRET") || "").trim();',
+                                  'var LINE_CHANNEL_ACCESS_TOKEN = (SCRIPT_PROPS.getProperty("LINE_CHANNEL_ACCESS_TOKEN") || SCRIPT_PROPS.getProperty("CHANNEL_ACCESS_TOKEN") || "").trim();',
+                                  'var LINE_GROUP_IDS = [',
+                                  '  "C990455b30e8f36f3fe9480da689e3a99", // 家長群組',
+                                  '  "C43bacd2f0e75d4df6679ae19c9134ba7"  // 學生群組',
+                                  '];',
                                   'var FIREBASE_URL = "https://firestore.googleapis.com/v1/projects/frc10114-team-manage/databases/(default)/documents/frc10114_teams/team_state";',
                                   '',
-                                  '// 1. 每日定時自動無人化抓取並寫入 A1 (透過 HTTP Header 傳遞 API Key，避免暴露於 URL Query)',
+                                  '// 1. 自動無人化抓取 Firebase 並寫入 A1 (同時相容 syncAttendanceToSheet 與 autoSyncTomorrowAttendance 兩種排程名稱)',
+                                  'function syncAttendanceToSheet() {',
+                                  '  return autoSyncTomorrowAttendance();',
+                                  '}',
+                                  '',
                                   'function autoSyncTomorrowAttendance() {',
                                   '  try {',
                                   '    var now = new Date();',
@@ -13982,20 +14065,41 @@
                                   '    return fullText;',
                                   '  } catch(err) {',
                                   '    Logger.log("❌ 自動更新失敗：" + err.toString());',
+                                  '    throw err;',
                                   '  }',
+                                  '}',
+                                  '',
+                                  '// 1b. 每日 21:00~22:00 同步試算表並推播至 LINE 群組 (若有設定 LINE_CHANNEL_ACCESS_TOKEN)',
+                                  'function sendLineAnnouncement() {',
+                                  '  var fullText = autoSyncTomorrowAttendance();',
+                                  '  if (!LINE_CHANNEL_ACCESS_TOKEN || !fullText) return fullText;',
+                                  '  var url = "https://api.line.me/v2/bot/message/push";',
+                                  '  for (var i = 0; i < LINE_GROUP_IDS.length; i++) {',
+                                  '    try {',
+                                  '      UrlFetchApp.fetch(url, {',
+                                  '        method: "post",',
+                                  '        headers: { "Content-Type": "application/json; charset=UTF-8", "Authorization": "Bearer " + LINE_CHANNEL_ACCESS_TOKEN },',
+                                  '        payload: JSON.stringify({ to: LINE_GROUP_IDS[i], messages: [{ type: "text", text: fullText }] }),',
+                                  '        muteHttpExceptions: true',
+                                  '      });',
+                                  '    } catch (e) {',
+                                  '      Logger.log("❌ LINE 發送異常: " + e.toString());',
+                                  '    }',
+                                  '  }',
+                                  '  return fullText;',
                                   '}',
                                   '',
                                   '// 2. 網頁後端代理 (/api/submit-sheet) 即時發送接收點',
                                   'function doPost(e) {',
                                   '  try {',
-                                  '    var data = JSON.parse(e.postData.contents);',
+                                  '    var data = (e && e.postData && e.postData.contents) ? JSON.parse(e.postData.contents) : {};',
                                   '    if (WEBHOOK_SECRET && data.token !== WEBHOOK_SECRET) {',
                                   '      throw new Error("未授權的請求：Webhook Token 驗證失敗");',
                                   '    }',
                                   '    var targetSheetId = data.spreadsheetId || SPREADSHEET_ID;',
                                   '    var ss = targetSheetId ? SpreadsheetApp.openById(targetSheetId) : SpreadsheetApp.getActiveSpreadsheet();',
                                   '    var sheet = ss.getSheetByName("明日申請在校名單") || ss.getActiveSheet();',
-                                  '    var content = data.fullText || "";',
+                                  '    var content = data.fullText || autoSyncTomorrowAttendance() || "";',
                                   '    sheet.getRange("A1").setValue(content);',
                                   '    return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);',
                                   '  } catch(err) {',
@@ -14003,16 +14107,22 @@
                                   '  }',
                                   '}',
                                   '',
-                                  '// 3. 一鍵建立每日定時觸發器（每天 21:00 自動執行）',
-                                  'function createDailyTrigger() {',
+                                  '// 3. 一鍵建立定時觸發器（每 30 分鐘自動同步試算表 + 每天 21:00 自動執行）',
+                                  'function setupAllTriggers() {',
                                   '  var triggers = ScriptApp.getProjectTriggers();',
                                   '  for (var i = 0; i < triggers.length; i++) {',
-                                  '    if (triggers[i].getHandlerFunction() === "autoSyncTomorrowAttendance") {',
+                                  '    var fn = triggers[i].getHandlerFunction();',
+                                  '    if (fn === "syncAttendanceToSheet" || fn === "sendLineAnnouncement" || fn === "autoSyncTomorrowAttendance") {',
                                   '      ScriptApp.deleteTrigger(triggers[i]);',
                                   '    }',
                                   '  }',
-                                  '  ScriptApp.newTrigger("autoSyncTomorrowAttendance").timeBased().everyDays(1).atHour(21).inTimezone("Asia/Taipei").create();',
-                                  '  Logger.log("✅ 已成功設定每日晚上 21:00 自動執行觸發器！");',
+                                  '  ScriptApp.newTrigger("syncAttendanceToSheet").timeBased().everyMinutes(30).create();',
+                                  '  ScriptApp.newTrigger("sendLineAnnouncement").timeBased().everyDays(1).atHour(21).inTimezone("Asia/Taipei").create();',
+                                  '  Logger.log("✅ 已成功設定每 30 分鐘同步試算表 + 每日 21:00 定時觸發器！");',
+                                  '}',
+                                  '',
+                                  'function createDailyTrigger() {',
+                                  '  setupAllTriggers();',
                                   '}',
                                   '',
                                   'function unwrapFirestoreValue(val) {',
