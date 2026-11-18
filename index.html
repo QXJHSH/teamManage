@@ -49,6 +49,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" integrity="sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz" crossorigin="anonymous"></script>
 
     <style>
       html, body {
@@ -6514,7 +6515,7 @@
         onUpdateQty,
         onAddMat,
       }) {
-        // Main Tab: 1. 機具使用排程 2. 教學設備 3. 材料耗材庫存
+        // Equipment management sub-tabs
         const [mainTab, setMainTab] = useState('schedule');
 
         // --- SUBSECTION 1: 機具使用排程 STATE ---
@@ -6646,12 +6647,12 @@
                 </div>
                 <h2 className="text-xl font-black text-zinc-900 tracking-tight">機具設備與耗材管理中心</h2>
                 <p className="text-xs text-zinc-500 mt-1">
-                  包含加工機具使用排程 (09:00-21:00 每小時預約)、教學設備編號借調狀態一覽、材料耗材數量控管。
+                  包含加工機具使用排程 (09:00-21:00 每小時預約)、教學設備編號借調狀態一覽、材料耗材數量控管與購買申請。
                 </p>
               </div>
 
-              {/* Three Primary Sub-Tab Switchers */}
-              <div className="flex items-center bg-zinc-100 p-1.5 rounded-xl border border-zinc-200 self-start md:self-auto text-xs font-bold">
+              {/* Equipment sub-tab switchers */}
+              <div className="flex flex-wrap items-center bg-zinc-100 p-1.5 rounded-xl border border-zinc-200 self-start md:self-auto text-xs font-bold">
                 <button
                   onClick={() => setMainTab('schedule')}
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-all ${
@@ -6678,6 +6679,16 @@
                 >
                   <Icon name="package" className="w-3.5 h-3.5 text-orange-400" />
                   <span>3. 材料耗材庫存</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMainTab('purchase')}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-all ${
+                    mainTab === 'purchase' ? 'bg-zinc-900 text-white shadow-xs' : 'text-zinc-600 hover:text-zinc-900'
+                  }`}
+                >
+                  <Icon name="package" className="w-3.5 h-3.5 text-orange-400" />
+                  <span>4. 材料／設備購買申請</span>
                 </button>
               </div>
             </div>
@@ -7876,6 +7887,10 @@
             )}
 
             {/* ======================================================= */}
+            <div hidden={mainTab !== 'purchase'}>
+              <PurchaseRequestForm key={currentMember?.id} applicantName={currentMember?.name ?? ''} />
+            </div>
+
             {/* 3. 材料耗材庫存 (馬達、齒輪、皮帶等) */}
             {/* ======================================================= */}
             {mainTab === 'materials' && (
@@ -8075,6 +8090,133 @@
               </div>
             )}
           </div>
+        );
+      }
+
+      function PurchaseRequestForm({ applicantName }) {
+        const [items, setItems] = useState(() => [crypto.randomUUID()]);
+        const [exporting, setExporting] = useState(false);
+        const [error, setError] = useState('');
+        const inputClass = 'w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:border-orange-500 focus:outline-none';
+
+        async function downloadRequest(event) {
+          event.preventDefault();
+          if (exporting) return;
+          setError('');
+          const data = new FormData(event.currentTarget);
+          const title = data.get('title').trim();
+          const applicant = data.get('applicant').trim();
+          const rows = items.map(id => [
+            title,
+            data.get(`name-${id}`).trim(),
+            Number(data.get(`quantity-${id}`)),
+            data.get(`spec-${id}`).trim(),
+            data.get(`link-${id}`).trim(),
+            applicant
+          ]);
+          if (!title || !applicant || rows.some(row => !row[1] || !Number.isSafeInteger(row[2]) || row[2] < 1)) {
+            setError('請填寫購買專案、購買申請人、品項名稱及正整數數量。');
+            return;
+          }
+          if (rows.some(row => row[4] && !/^https?:\/\//i.test(row[4]))) {
+            setError('購買連結須以 https:// 或 http:// 開頭。');
+            return;
+          }
+
+          setExporting(true);
+          try {
+            const workbook = new window.ExcelJS.Workbook();
+            const sheet = workbook.addWorksheet('購買申請', { views: [{ state: 'frozen', ySplit: 1 }] });
+            sheet.columns = [
+              { header: '標題（購買專案）', width: 26 },
+              { header: '材料或設備名稱', width: 30 },
+              { header: '數量', width: 16 },
+              { header: '規格', width: 32 },
+              { header: '連結', width: 48 },
+              { header: '購買申請人', width: 20 }
+            ];
+            sheet.addRows(rows);
+            sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF27272A' } };
+            sheet.getRow(1).height = 22;
+            sheet.autoFilter = { from: 'A1', to: `F${rows.length + 1}` };
+
+            const bytes = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `FRC10114_購買申請_${getTodayDateStr()}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } catch {
+            setError('Excel 匯出失敗，請確認網路連線後重試。');
+          } finally {
+            setExporting(false);
+          }
+        }
+
+        return (
+          <form onSubmit={downloadRequest} className="rounded-xl border border-zinc-200 bg-white p-5 shadow-xs space-y-5">
+            <div>
+              <h3 className="text-base font-black text-zinc-900">材料／設備購買申請</h3>
+              <p className="mt-1 text-xs text-zinc-500">填寫品項後下載 Excel，供後續送審使用。</p>
+            </div>
+            <fieldset disabled={exporting} className="min-w-0 space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-xs font-semibold text-zinc-700">
+                  <span>標題（購買專案）</span>
+                  <input className={inputClass} name="title" required maxLength={200} />
+                </label>
+                <label className="space-y-1 text-xs font-semibold text-zinc-700">
+                  <span>購買申請人</span>
+                  <input className={inputClass} name="applicant" defaultValue={applicantName} required maxLength={200} />
+                </label>
+              </div>
+              {items.map((id, index) => (
+                <fieldset key={id} className="min-w-0 rounded-lg border border-zinc-200 px-3 pb-3">
+                  <legend className="px-2 text-sm font-semibold text-zinc-700">品項 {index + 1}</legend>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_2fr_2fr]">
+                    <label className="min-w-0 space-y-1 text-xs font-semibold text-zinc-700">
+                      <span>材料或設備名稱</span>
+                      <input className={inputClass} name={`name-${id}`} required maxLength={200} />
+                    </label>
+                    <label className="min-w-0 space-y-1 text-xs font-semibold text-zinc-700">
+                      <span>數量</span>
+                      <input className={inputClass} name={`quantity-${id}`} type="number" min="1" step="1" required />
+                    </label>
+                    <label className="min-w-0 space-y-1 text-xs font-semibold text-zinc-700">
+                      <span>規格（選填）</span>
+                      <input className={inputClass} name={`spec-${id}`} maxLength={500} />
+                    </label>
+                    <label className="min-w-0 space-y-1 text-xs font-semibold text-zinc-700">
+                      <span>連結（選填）</span>
+                      <input className={inputClass} name={`link-${id}`} type="url" maxLength={2000} placeholder="https://" />
+                    </label>
+                  </div>
+                  {items.length > 1 && (
+                    <button type="button" className="mt-3 text-xs font-semibold text-red-600 hover:underline"
+                      onClick={() => setItems(previous => previous.filter(item => item !== id))}>
+                      移除品項 {index + 1}
+                    </button>
+                  )}
+                </fieldset>
+              ))}
+              <div className="flex flex-wrap justify-between gap-3">
+                <button type="button" className="rounded-lg border border-zinc-200 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50"
+                  onClick={() => setItems(previous => [...previous, crypto.randomUUID()])}>
+                  ＋ 新增品項
+                </button>
+                <button type="submit" className="flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-2 text-xs font-semibold text-white hover:bg-orange-700 disabled:opacity-60">
+                  <Icon name="download" className="h-4 w-4" />
+                  {exporting ? '匯出中…' : '下載 Excel'}
+                </button>
+              </div>
+            </fieldset>
+            {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+          </form>
         );
       }
 

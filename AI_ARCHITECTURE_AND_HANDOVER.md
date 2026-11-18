@@ -13,7 +13,7 @@
 ## 1. 🚨 核心禁忌與防呆警告（AI 絕對不可踩的雷）
 
 1. **`index.html` 是唯一的前端真實來源（Single Source of Truth）！**
-   - 本系統前端為單一檔案架構（Single-File React 18 SPA），所有 HTML、CSS、安全加解密引擎與 React 元件皆位於根目錄的 [`index.html`](./index.html)（約 21,940 行）。
+   - 本系統前端為單一檔案架構（Single-File React 18 SPA），所有 HTML、CSS、安全加解密引擎與 React 元件皆位於根目錄的 [`index.html`](./index.html)（約 22,116 行）。
    - **嚴禁修改 `src/` 目錄下的任何檔案**！`src/` 與 `vite.config.ts` 僅為最初建置時遺留的空殼，生產環境（Vercel）與本地伺服器（[`server.js`](./server.js)）皆直接載入根目錄的 [`index.html`](./index.html)。
 2. **嚴禁將隊員敏感個資（PII）或密碼寫入 `frc10114_teams/team_state`！**
    - 敏感個資（`phone`, `parentPhone`, `birthday`, `idNumber`, `email`, `skills`, `passwordHash`, `parentPasswordHash`）**只能**加密存放在獨立集合 `frc10114_vault/{docId}`。
@@ -140,17 +140,18 @@ flowchart TD
 | `L2061 - L2915` | `verifyAccountCredential`, `fetchMemberVaultPii`, `unlockSessionVault`, `saveAdminVaultData`, `saveMemberVaultData`, `rotateVaultPassword` | **核心加密保險箱引擎 (`frc10114_vault`)**：登入驗證、隊員個資多通道寫入、管理員批次與單點解密、密碼變更輪替。 |
 | `L2921 - L3060` | `smartMergeField` | 多人同時在線編輯時的陣列差異比對與無損合併演算法。 |
 | `L3065 - L6490` | `App()` | 主應用程式狀態中心、雲端 `onSnapshot` 監聽、隊員新增/刪除 (`handleDeleteMember`)、個資儲存 (`handleUpdateProfile`)、CSV 匯出 (`handleExportMembersList`) 與分頁路由。 |
-| `L6496 - L8080` | `UnifiedEquipmentModule` | 機台預約、教學設備借還、設備分類新增/刪除與數量批次調整。 |
-| `L8082 - L8690` | `MonthCalendarView`, `normalizeCourseName`, `parseMultiLineDriftText`, `computeMaterialSummaryByCourse` | 月曆視圖與「教材準備 / 材料漂流」文字解析、分類正規化（發光卡片統一）與待寄統計。 |
-| `L8696 - L11370` | `AdminCalendarTab` | 管理員行事曆、活動教材管理、材料漂流多行匯入與已寄出確認。 |
-| `L11372 - L12875` | `AdminTaskReviewTab` | 管理員學習任務審核集章與組別待完成工作管理。 |
-| `L12880 - L14245` | `buildAttendanceSheetPayload`, `autoSyncTomorrowAttendanceToSheet`, `AdminAttendanceTab` | 明日留校名單排版、班級座號排序、自動同步試算表與 Apps Script 範本產生器。 |
-| `L14248 - L15315` | `MemberProfileTab` | 隊員與管理員個人資料編輯、座右銘、頭像上傳與密碼修改介面。 |
-| `L15319 - L16540` | `MemberCalendarTab` | 隊員端行事曆檢視、活動報名與教材準備清單唯讀檢視。 |
-| `L16544 - L17240` | `MemberLearningTab`, `MemberTasksTab`, `MemberAttendanceTab` | 隊員端學習集章、工作認領與到校留校/請假申請。 |
-| `L17242 - L17975` | `ParentPortalTab`, `ParentAttendanceTab` | 家長關心通道首頁、孩子出勤查閱與家長密碼變更。 |
-| `L17979 - L20290` | `MemberImportModal`, `OfficeToolsTab` | 辦公工具組：公假單產生器、活動簽到表產生器、開會通知單產生器（支援匯入隊員名單）。 |
-| `L20295 - L21860` | `DataExportModal`, `AddAdminModal`, `FirebaseConfigModal`, `RoleLoginModal` | 系統 JSON 備份還原、新增管理員、雲端連線設定與登入入口閘門。 |
+| `L6497 - L8094` | `UnifiedEquipmentModule` | 機台預約、教學設備借還、材料庫存及購買申請分頁。 |
+| `L8096 - L8221` | `PurchaseRequestForm` | 多品項購買申請表與瀏覽器端 Excel 匯出。 |
+| `L8224 - L8832` | `MonthCalendarView`, `normalizeCourseName`, `parseMultiLineDriftText`, `computeMaterialSummaryByCourse` | 月曆視圖與「教材準備 / 材料漂流」文字解析、分類正規化（發光卡片統一）與待寄統計。 |
+| `L8838 - L11512` | `AdminCalendarTab` | 管理員行事曆、活動教材管理、材料漂流多行匯入與已寄出確認。 |
+| `L11514 - L13017` | `AdminTaskReviewTab` | 管理員學習任務審核集章與組別待完成工作管理。 |
+| `L13022 - L14387` | `buildAttendanceSheetPayload`, `autoSyncTomorrowAttendanceToSheet`, `AdminAttendanceTab` | 明日留校名單排版、班級座號排序、自動同步試算表與 Apps Script 範本產生器。 |
+| `L14390 - L15457` | `MemberProfileTab` | 隊員與管理員個人資料編輯、座右銘、頭像上傳與密碼修改介面。 |
+| `L15461 - L16682` | `MemberCalendarTab` | 隊員端行事曆檢視、活動報名與教材準備清單唯讀檢視。 |
+| `L16686 - L17382` | `MemberLearningTab`, `MemberTasksTab`, `MemberAttendanceTab` | 隊員端學習集章、工作認領與到校留校/請假申請。 |
+| `L17384 - L18117` | `ParentPortalTab`, `ParentAttendanceTab` | 家長關心通道首頁、孩子出勤查閱與家長密碼變更。 |
+| `L18121 - L20432` | `MemberImportModal`, `OfficeToolsTab` | 辦公工具組：公假單產生器、活動簽到表產生器、開會通知單產生器（支援匯入隊員名單）。 |
+| `L20437 - L22002` | `DataExportModal`, `AddAdminModal`, `FirebaseConfigModal`, `RoleLoginModal` | 系統 JSON 備份還原、新增管理員、雲端連線設定與登入入口閘門。 |
 
 ---
 
@@ -173,6 +174,7 @@ flowchart TD
 
 | 日期 | Commit | 修改模組 | 修改內容與解決的問題摘要 |
 | :--- | :--- | :--- | :--- |
+| **2026-11-18** | — | 材料／設備購買申請 | 新增管理員與隊員共用的購買申請分頁，可填寫多筆品項並下載含六欄的 Excel 活頁簿。申請資料由瀏覽器直接匯出。 |
 | **2026-11-18** | `f7e169b` / `35c8862` | 部署來源切換 & 考勤名單去重 | 1. 將 Git 遠端儲存庫與 Vercel 部署來源正式遷移至 `https://github.com/QXJHSH/teamManage.git`。<br>2. 於 `index.html` 與 `api/submit-sheet.js` 對匯出之各時段留校名單加入 `[...new Set(...)]` 去重，防止因舊版學號重疊產生重複姓名。<br>3. 建立本交接文件 `AI_ARCHITECTURE_AND_HANDOVER.md` 與 `AGENTS.md`。 |
 | **2026-11-15** | `ef9f85d` | 留校名單自動同步 Google 試算表 & LINE | 1. 修復 `GOOGLE_SPREADSHEET_ID` 空值問題與登出誤刪 Webhook URL 問題。<br>2. 新增 `autoSyncTomorrowAttendanceToSheet()`，當學生/管理員登記或取消留校、或載入雲端考勤有異動時，自動於背景呼叫 `/api/submit-sheet` 同步至試算表 `A1`。<br>3. 升級 `api/submit-sheet.js` 支援 `GET` 自動抓取 Firestore 並排版寫入試算表。<br>4. 更新 Apps Script 範本，同時相容 `syncAttendanceToSheet`（每 30 分鐘同步）與 `sendLineAnnouncement`（每日 21:00 LINE 推播）。 |
 | **2026-11-06** | `41ba7bf` / `fb185b9` / `9dcfc84` | 隊員個資保險箱 (`frc10114_vault`) 與管理員 CSV 匯出 | 1. 解決隊員儲存個人資料後登出消失、以及管理員端看不到隊員個資與 CSV 匯出空白的問題。<br>2. 實作雙層本地+雲端多通道保險箱（`self_`, `mpii_`, `inbox_`），並避開 `firestore.rules` 對 `frc10114_vault` 的 `allow list: if false` 限制，改為依 `member.id` 逐筆並行 `.doc().get()`。<br>3. 於管理員登入、`onSnapshot`、切換至 `members` 分頁及匯出 CSV 前自動解鎖全部隊員個資。 |
