@@ -25,7 +25,8 @@
 4. **注意 `frc10114_vault` 的 Firestore 安全規則限制：**
    - [`firestore.rules`](./firestore.rules) 中 `frc10114_vault/{docId}` 設定為 **`allow get: if true; allow list: if false;`**。
    - 這代表**絕對不能對 `frc10114_vault` 使用 `.where(...)` 或 `.get()` 查詢整個集合**（會觸發 `PERMISSION_DENIED`），只能透過已知的 `docId` 執行單筆 `vaultCol.doc(docId).get()`！
-   - 寫入 `frc10114_vault/{docId}` 的欄位數量上限為 15 個（`request.resource.data.keys().size() <= 15`），刪除僅允許符合 `^(auth_|adm_|self_|mpii_|inbox_|outbox_).*` 的文件 ID。
+5. **React Hooks 引用規範：**
+   - 由於本專案使用瀏覽器端 UMD 版 React（無 ES Module `import`），頂層 L293 已解構 `const { useState, useEffect, useMemo, useRef, useCallback } = React;`。若元件內需使用其他 React API，請務必使用 `React.xxx` 或確認已於 L293 頂層解構，切勿直接呼叫未解構之識別字（否則進入分頁時會觸發 `ReferenceError` 導致畫面空白）。
 
 ---
 

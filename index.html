@@ -290,7 +290,7 @@
 
     <!-- Main React Application Script -->
     <script type="text/babel">
-      const { useState, useEffect, useMemo } = React;
+      const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
       // --- 0. SECURITY & SECRET OBFUSCATION HELPERS ---
       const SEC_SALT = 'FRC10114_SEC_2026_KEY';
@@ -8206,7 +8206,7 @@
         const [applicantFilter, setApplicantFilter] = useState('all');
         const [searchQuery, setSearchQuery] = useState('');
 
-        const formTopRef = useRef(null);
+        const formTopRef = React.useRef(null);
         const inputClass = 'w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:border-orange-500 focus:bg-white focus:outline-none transition-colors';
 
         useEffect(() => {
