@@ -131,7 +131,7 @@ flowchart TD
   - 購買申請品項儲存於 `frc10114_teams/team_state.materials` 陣列中，並以 `recordType: 'purchase_request'` 及 `id: 'preq-...'` 與一般實體耗材庫存（`mat-...`）嚴格區隔（透過 `isPurchaseRequestRecord(m)` 判斷）。
   - 一般庫存表格（第 3 子分頁）與 `DataExportModal` 耗材 CSV 匯出均自動過濾掉 `isPurchaseRequestRecord(m)`，確保庫存數據純淨。
 - **隊員端流程 (`!isAdmin`)**：
-  - 填寫「標題（購買專案）」、「購買申請人」與多筆品項（名稱、正整數數量、規格、購買連結）後送出，即刻寫入雲端並於下方「我的材料／設備購買申請紀錄」顯示 **`⏳ 申請中 (等待教師採購)`**。
+  - 購買申請人自動綁定目前登入帳號之姓名與學號（`currentMember.name` / `currentMember.id`），無需手動填寫。隊員僅需填寫「標題（購買專案）」與多筆品項（名稱、正整數數量、規格、購買連結）後送出，即刻寫入雲端並於下方「我的材料／設備購買申請紀錄」顯示 **`⏳ 申請中 (等待教師採購)`**。
   - 在教師勾選已購買前，隊員可隨時點擊 **「✏️ 取消並重新編輯」**（將該品項自雲端撤回，並自動將原填寫內容完整帶回上方表單供修改後重送），或點擊 **「🗑️ 取消申請」** 刪除。
 - **管理員／教師端流程 (`isAdmin`)**：
   - 自動匯集全隊所有隊員送出的購買需求，顯示申請人姓名/學號、購買專案、品項名稱、數量、規格與外部購買連結，並支援狀態篩選（待購買 / 已購買 / 全部）、申請人篩選、關鍵字搜尋與 Excel (`.xlsx`) 匯出。
@@ -187,7 +187,7 @@ flowchart TD
 
 | 日期 | Commit | 修改模組 | 修改內容與解決的問題摘要 |
 | :--- | :--- | :--- | :--- |
-| **2026-11-18** | 最新 | 材料／設備購買申請雲端協作流程 (`PurchaseRequestForm`) | 1. 將購買申請升級為雲端即時同步系統（以 `recordType: 'purchase_request'` 與 `id: 'preq-*'` 儲存於 `materials`，完美相容 `firestore.rules` 與 `smartMergeField` 多人併發合併）。<br>2. **隊員端**：支援新增多筆品項後送出，於畫面下方即時顯示「⏳ 申請中」或「✅ 已購買」狀態；申請中品項可點擊「✏️ 取消並重新編輯」（自動撤回並將內容帶回表單修改重送）或「🗑️ 取消申請」。<br>3. **管理員／教師端**：自動匯集全隊所有隊員申請需求，顯示申請人、專案標題、品項、數量、規格與購買連結，支援教師直接勾選「已購買」完成採購並同步更新隊員畫面。 |
+| **2026-11-18** | 最新 | 材料／設備購買申請雲端協作流程 (`PurchaseRequestForm`) | 1. 將購買申請升級為雲端即時同步系統（以 `recordType: 'purchase_request'` 與 `id: 'preq-*'` 儲存於 `materials`，完美相容 `firestore.rules` 與 `smartMergeField` 多人併發合併）。<br>2. **隊員端**：購買申請人自動綁定登入帳號名稱（免手動填寫），支援新增多筆品項後送出，於畫面下方即時顯示「⏳ 申請中」或「✅ 已購買」狀態；申請中品項可點擊「✏️ 取消並重新編輯」（自動撤回並將內容帶回表單修改重送）或「🗑️ 取消申請」。<br>3. **管理員／教師端**：自動匯集全隊所有隊員申請需求，顯示申請人、專案標題、品項、數量、規格與購買連結，支援教師直接勾選「已購買」完成採購並同步更新隊員畫面。<br>4. 補齊頂層 `useRef` / `useCallback` 解構並加入元件執行期渲染測試。 |
 | **2026-11-18** | `7dd6acd` | 材料／設備購買申請 | 新增管理員與隊員共用的購買申請分頁，可填寫多筆品項並下載含六欄的 Excel 活頁簿。申請資料由瀏覽器直接匯出。 |
 | **2026-11-18** | `f7e169b` / `35c8862` | 部署來源切換 & 考勤名單去重 | 1. 將 Git 遠端儲存庫與 Vercel 部署來源正式遷移至 `https://github.com/QXJHSH/teamManage.git`。<br>2. 於 `index.html` 與 `api/submit-sheet.js` 對匯出之各時段留校名單加入 `[...new Set(...)]` 去重，防止因舊版學號重疊產生重複姓名。<br>3. 建立本交接文件 `AI_ARCHITECTURE_AND_HANDOVER.md` 與 `AGENTS.md`。 |
 | **2026-11-15** | `ef9f85d` | 留校名單自動同步 Google 試算表 & LINE | 1. 修復 `GOOGLE_SPREADSHEET_ID` 空值問題與登出誤刪 Webhook URL 問題。<br>2. 新增 `autoSyncTomorrowAttendanceToSheet()`，當學生/管理員登記或取消留校、或載入雲端考勤有異動時，自動於背景呼叫 `/api/submit-sheet` 同步至試算表 `A1`。<br>3. 升級 `api/submit-sheet.js` 支援 `GET` 自動抓取 Firestore 並排版寫入試算表。<br>4. 更新 Apps Script 範本，同時相容 `syncAttendanceToSheet`（每 30 分鐘同步）與 `sendLineAnnouncement`（每日 21:00 LINE 推播）。 |

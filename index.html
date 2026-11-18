@@ -8193,8 +8193,11 @@
         onUpdatePurchaseRequest,
         onDeletePurchaseRequest,
       }) {
+        const boundApplicantName = (currentMember?.name || applicantName || (isAdmin ? '指導教師' : '隊員')).trim();
+        const boundApplicantId = currentMember?.id || '';
+
         const [title, setTitle] = useState('');
-        const [applicant, setApplicant] = useState(() => applicantName || currentMember?.name || '');
+        const [overrideApplicant, setOverrideApplicant] = useState(null); // Preserves original student applicant if admin re-edits
         const [items, setItems] = useState(() => [createBlankPurchaseItem()]);
         const [exporting, setExporting] = useState(false);
         const [error, setError] = useState('');
@@ -8209,11 +8212,8 @@
         const formTopRef = React.useRef(null);
         const inputClass = 'w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 focus:border-orange-500 focus:bg-white focus:outline-none transition-colors';
 
-        useEffect(() => {
-          if (!applicant && (applicantName || currentMember?.name)) {
-            setApplicant(applicantName || currentMember?.name || '');
-          }
-        }, [applicantName, currentMember]);
+        const effectiveApplicantName = overrideApplicant?.name || boundApplicantName;
+        const effectiveApplicantId = overrideApplicant?.id !== undefined ? overrideApplicant.id : boundApplicantId;
 
         const updateItemField = (key, field, value) => {
           setItems(prev => prev.map(it => it.key === key ? { ...it, [field]: value } : it));
@@ -8221,7 +8221,7 @@
 
         const validateFormItems = () => {
           const cleanTitle = (title || '').trim();
-          const cleanApplicant = (applicant || '').trim();
+          const cleanApplicant = effectiveApplicantName;
           const normalizedRows = items.map(it => ({
             key: it.key,
             name: (it.name || '').trim(),
@@ -8230,8 +8230,8 @@
             link: (it.link || '').trim(),
           }));
 
-          if (!cleanTitle || !cleanApplicant || normalizedRows.some(r => !r.name || !Number.isSafeInteger(r.quantity) || r.quantity < 1)) {
-            setError('請完整填寫「標題（購買專案）」、「購買申請人」、「材料或設備名稱」及正整數「數量」。');
+          if (!cleanTitle || normalizedRows.some(r => !r.name || !Number.isSafeInteger(r.quantity) || r.quantity < 1)) {
+            setError('請完整填寫「標題（購買專案）」、「材料或設備名稱」及正整數「數量」。');
             return null;
           }
           if (normalizedRows.some(r => r.link && !/^https?:\/\//i.test(r.link))) {
@@ -8260,7 +8260,7 @@
             quantity: row.quantity,
             specification: row.spec,
             link: row.link,
-            applicantId: currentMember?.id || '',
+            applicantId: effectiveApplicantId,
             applicantName: cleanApplicant,
             status: 'pending',
             createdAt: nowStr,
@@ -8274,7 +8274,7 @@
 
           // Reset form after submitting
           setTitle('');
-          setApplicant(applicantName || currentMember?.name || cleanApplicant);
+          setOverrideApplicant(null);
           setItems([createBlankPurchaseItem()]);
           setReEditNotice('');
           if (isAdmin) {
@@ -8296,7 +8296,11 @@
           const hasExistingTypedContent = items.some(it => (it.name || '').trim() || (it.spec || '').trim() || (it.link || '').trim());
           if (!hasExistingTypedContent) {
             setTitle(reqItem.title || '');
-            setApplicant(reqItem.applicantName || applicantName || currentMember?.name || '');
+            if (isAdmin && reqItem.applicantName) {
+              setOverrideApplicant({ name: reqItem.applicantName, id: reqItem.applicantId || '' });
+            } else {
+              setOverrideApplicant(null);
+            }
             setItems([recalledItem]);
           } else {
             if (!title.trim() && reqItem.title) {
@@ -8707,14 +8711,13 @@
                       {isAdmin ? '新增材料／設備購買申請' : '填寫材料／設備購買申請單'}
                     </h3>
                     <p className="mt-1 text-xs text-zinc-500">
-                      填寫需要的材料或設備品項（可一次新增多筆品項）並點選「送出購買申請」，送出後將自動同步至指導教師端審核採購。
+                      申請人已自動綁定您的登入帳號名稱；填寫需要的材料或設備品項（可一次新增多筆品項）並點選「送出購買申請」，將自動同步至指導教師端審核採購。
                     </p>
                   </div>
-                  {!isAdmin && (
-                    <span className="self-start sm:self-auto px-2.5 py-1 rounded-lg bg-orange-50 text-orange-700 border border-orange-200 text-xs font-bold">
-                      👤 申請隊員：{applicant || applicantName || '隊員'}
-                    </span>
-                  )}
+                  <span className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-orange-50 text-orange-800 border border-orange-200 text-xs font-extrabold flex items-center gap-1.5">
+                    <span>👤 購買申請人（已綁定帳號）：{effectiveApplicantName}</span>
+                    {effectiveApplicantId && <span className="font-mono text-[11px] text-orange-600">({effectiveApplicantId})</span>}
+                  </span>
                 </div>
 
                 {reEditNotice && (
@@ -8731,8 +8734,8 @@
                 )}
 
                 <fieldset disabled={exporting} className="min-w-0 space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="space-y-1 text-xs font-semibold text-zinc-700">
+                  <div>
+                    <label className="block space-y-1 text-xs font-semibold text-zinc-700">
                       <span>標題（購買專案） *</span>
                       <input
                         className={inputClass}
@@ -8740,17 +8743,6 @@
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         placeholder="例如：2026 賽季底盤傳動組件、電子電路耗材補充"
-                        required
-                        maxLength={200}
-                      />
-                    </label>
-                    <label className="space-y-1 text-xs font-semibold text-zinc-700">
-                      <span>購買申請人 *</span>
-                      <input
-                        className={inputClass}
-                        name="applicant"
-                        value={applicant}
-                        onChange={(e) => setApplicant(e.target.value)}
                         required
                         maxLength={200}
                       />
