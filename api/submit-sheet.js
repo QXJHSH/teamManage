@@ -100,9 +100,9 @@ async function fetchAndBuildTomorrowPayload(customDate) {
   const afternoon = sortStudentsByClassOrder(targetRecords.filter(r => (r.slots || []).includes('afternoon')), members);
   const evening = sortStudentsByClassOrder(targetRecords.filter(r => (r.slots || []).includes('evening')), members);
 
-  const morningNames = morning.map(r => formatStudentWithClass(r.studentName, r.studentId, members));
-  const afternoonNames = afternoon.map(r => formatStudentWithClass(r.studentName, r.studentId, members));
-  const eveningNames = evening.map(r => formatStudentWithClass(r.studentName, r.studentId, members));
+  const morningNames = [...new Set(morning.map(r => formatStudentWithClass(r.studentName, r.studentId, members)))];
+  const afternoonNames = [...new Set(afternoon.map(r => formatStudentWithClass(r.studentName, r.studentId, members)))];
+  const eveningNames = [...new Set(evening.map(r => formatStudentWithClass(r.studentName, r.studentId, members)))];
 
   const periodSections = [];
   if (morningNames.length > 0) periodSections.push(`⛅ 上午 (09-12點)：\n${morningNames.join('\n')}`);

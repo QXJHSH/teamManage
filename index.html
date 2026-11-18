@@ -13008,9 +13008,9 @@
         const afternoon = sortStudentsByClassOrder(target.filter(r => (r.slots || []).includes('afternoon')), membersList);
         const evening = sortStudentsByClassOrder(target.filter(r => (r.slots || []).includes('evening')), membersList);
 
-        const morningNames = morning.map(r => formatStudentWithClass(r.studentName, r.studentId, membersList));
-        const afternoonNames = afternoon.map(r => formatStudentWithClass(r.studentName, r.studentId, membersList));
-        const eveningNames = evening.map(r => formatStudentWithClass(r.studentName, r.studentId, membersList));
+        const morningNames = [...new Set(morning.map(r => formatStudentWithClass(r.studentName, r.studentId, membersList)))];
+        const afternoonNames = [...new Set(afternoon.map(r => formatStudentWithClass(r.studentName, r.studentId, membersList)))];
+        const eveningNames = [...new Set(evening.map(r => formatStudentWithClass(r.studentName, r.studentId, membersList)))];
 
         const periodSections = [];
         if (morningNames.length > 0) periodSections.push(`⛅ 上午 (09-12點)：\n${morningNames.join('\n')}`);
@@ -13111,9 +13111,9 @@
           const sortedAfternoon = sortStudentsByClassOrder(afternoon, members);
           const sortedEvening = sortStudentsByClassOrder(evening, members);
 
-          const morningNames = sortedMorning.map(r => formatStudentWithClass(r.studentName, r.studentId, members));
-          const afternoonNames = sortedAfternoon.map(r => formatStudentWithClass(r.studentName, r.studentId, members));
-          const eveningNames = sortedEvening.map(r => formatStudentWithClass(r.studentName, r.studentId, members));
+          const morningNames = [...new Set(sortedMorning.map(r => formatStudentWithClass(r.studentName, r.studentId, members)))];
+          const afternoonNames = [...new Set(sortedAfternoon.map(r => formatStudentWithClass(r.studentName, r.studentId, members)))];
+          const eveningNames = [...new Set(sortedEvening.map(r => formatStudentWithClass(r.studentName, r.studentId, members)))];
 
           const morningStr = morningNames.length > 0 ? morningNames.join('、') : '無人申請';
           const afternoonStr = afternoonNames.length > 0 ? afternoonNames.join('、') : '無人申請';
